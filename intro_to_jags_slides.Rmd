@@ -1,0 +1,46 @@
+---
+title: "Introduction to JAGS and rJAGS"
+subtitle: 
+author: "Athena Chen"
+date: "Tuesday, April 28, 2020"
+institute: "JHU Biostatistics Student Computing Club"
+fontsize: 10pt
+output: 
+  beamer_presentation:
+    latex_engine: xelatex
+header-includes:
+  - \usetheme[progressbar = foot]{metropolis}
+  - \usepackage{fontspec}
+  - \usepackage[font={small}]{caption}
+  - \definecolor{darkblue}{rgb}{0.04706, 0.13725, 0.26667}
+  - \definecolor{bluegrey}{rgb}{0.3686, 0.5255, 0.6235}
+  - \definecolor{tan}{HTML}{d9c4b1}
+  - \definecolor{darktan}{HTML}{c09d7e}
+  - \setbeamercolor{normal text}{fg = darkblue}
+  - \setbeamercolor{title separator}{fg = darktan, bg = tan}
+  - \setbeamercolor{section separator}{fg = darktan}
+  - \setbeamercolor{progress bar}{fg = darktan, bg = tan}
+  - \setbeamercolor{progress bar in head/foot}{fg = bluegrey, bg = darkblue}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Section header
+
+## Overview
+
+Methods for analyzing genomic count data have typically been oriented around RNA sequencing (RNA-Seq). Here, we explore how RNA-Seq methods can be extended to other types of count data, specifically phage immunoprecipitation sequencing (PhIP-Seq). 
+
+## Outline 
+
+- Setup & Notation
+- Background
+    - RNA-Seq
+    - Immunology and PhIP-Seq
+    - Methods for evaluating differential expression
+- HIV example
+- Additional Comments
+
+
