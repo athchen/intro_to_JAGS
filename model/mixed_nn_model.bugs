@@ -1,0 +1,29 @@
+### JAGS model for a simple normal-normal model
+# ----- data -----
+# n               number of samples 
+# Y               vector of observed data
+
+# ----- Prior parameters -----
+# mu_01, tau2_0   prior parameters for mu 1
+# mu_02, tau2_0   prior parameters for mu 2
+# a, b            prior parameters for tau2
+# alpha, beta     prior parameters for pi
+
+# ----- parameters of interest -----
+# Z             group identity
+# mu_1, mu_2    mean of Y for groups 1 and 2
+# tau2          variance of data Y
+# pi            probability of being in group 1
+
+model {
+  mu_1 ~ dnorm(mu_01, tau2_0)
+  mu_2 ~ dnorm(mu_02, tau2_0)
+  tau2 ~ dgamma(a, b)
+  pi ~ dbeta(alpha, beta)
+  
+  for(i in 1:n){
+    Z[i] ~ dbern(pi)
+    mu[i] <- Z[i]*mu_1 + (1-Z[i])*mu_2
+    Y[i] ~ dnorm(mu[i], tau2)
+  }
+}

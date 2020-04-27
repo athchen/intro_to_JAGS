@@ -4,7 +4,6 @@ subtitle:
 author: "Athena Chen"
 date: "Tuesday, April 28, 2020"
 institute: "JHU Biostatistics Student Computing Club"
-fontsize: 10pt
 output: 
   beamer_presentation:
     latex_engine: xelatex
@@ -16,6 +15,7 @@ header-includes:
   - \definecolor{bluegrey}{rgb}{0.3686, 0.5255, 0.6235}
   - \definecolor{tan}{HTML}{d9c4b1}
   - \definecolor{darktan}{HTML}{c09d7e}
+  - \setbeamercolor{structure}{bg = white}
   - \setbeamercolor{normal text}{fg = darkblue}
   - \setbeamercolor{title separator}{fg = darktan, bg = tan}
   - \setbeamercolor{section separator}{fg = darktan}
@@ -24,23 +24,487 @@ header-includes:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
-```
+knitr::opts_chunk$set(echo = FALSE, out.width="100%")
 
-# Section header
+library(pacman)
+p_load(tidyverse, rjags, latex2exp)
+```
 
 ## Overview
 
-Methods for analyzing genomic count data have typically been oriented around RNA sequencing (RNA-Seq). Here, we explore how RNA-Seq methods can be extended to other types of count data, specifically phage immunoprecipitation sequencing (PhIP-Seq). 
+\textcolor{darktan}{\textbf{Just Another Gibbs Sampler (JAGS)}}
 
-## Outline 
+  * Introduction, installation, and useful resources
+  * Components of a JAGS program
+  * The JAGS language
+  * rJAGS
 
-- Setup & Notation
-- Background
-    - RNA-Seq
-    - Immunology and PhIP-Seq
-    - Methods for evaluating differential expression
-- HIV example
-- Additional Comments
+\textcolor{darktan}{\textbf{Example: Normal-Normal Model}}
+
+\textcolor{darktan}{\textbf{Example: Mixture of Normal Distributions}}
+
+  * The label switching problem
+  
+\textcolor{darktan}{\textbf{Additional Tricks and Tips}}
+
+  * Custom likelihoods: the zero's and one's trick
+    
+    
+# Just Another Gibbs Sampler (JAGS)
+
+## Introduction, installation, and useful resources
+
+\textcolor{darktan}{\textbf{Just Another Gibbs Sampler (JAGS)}} is a program for conducting Bayesian analyses and modeling using MCMC. 
+
+* Writen in `C++` and available on all major OS.
+* Slice sampler (Neal 2003, *The Annals of Statistics*)
+
+\textcolor{darktan}{\textbf{Installation}}
+
+* **Sourceforge**: https://sourceforge.net/projects/mcmc-jags
+* **Homebrew** (MacOS): `brew install jags`
+
+\textcolor{darktan}{\textbf{Useful resources}}
+
+* [\underline{User manual}](http://people.stat.sc.edu/hansont/stat740/jags_user_manual.pdf)
+
+## The JAGS language
+
+\textcolor{darktan}{\textbf{The JAGS language is very friendly to} \texttt{R} \textbf{users.}}
+
+\textcolor{darktan}{\textbf{Relations}}
+
+\begin{tabular}{p{4cm}p{5cm}}
+      deterministic assignment & \texttt{mu[i] <- alpha + beta*x[i]}\\
+      stochastic assignment & \texttt{Y[i]} $\mathtt{\sim}$  \texttt{dnorm(mu[i], tau)}
+\end{tabular}
+  
+\textcolor{darktan}{\textbf{Arrays and subsetting\footnotemark}} 
+
+\begin{tabular}{p{4cm}p{5cm}}
+      vectors & \texttt{mu[1]}, \texttt{mu[1:10]}\\
+      arrays & \texttt{B[r,c]}, \texttt{B[1:M,c]}, \texttt{B[1:M,1:N]}
+\end{tabular}
+
+\textcolor{darktan}{\textbf{Vector-construction and for-loops}}
+
+\begin{tabular}{p{4cm}p{5cm}}
+      Vector construction & \texttt{y <- c(x1, x2)}\\
+      for-loops & \texttt{for(i in 1:N)} $\mathtt{\lbrace \cdots \rbrace}$
+\end{tabular}
+
+<!-- \textcolor{darktan}{\textbf{Data transformations}} -->
+<!-- \begin{tabular}{p{4cm}p{5cm}} -->
+<!--       Square root & \texttt{sqrt()}\\ -->
+<!--       Power & \texttt{pow()}  -->
+<!-- \end{tabular} -->
+
+\footnotetext[1]{Indices cannot be stochastic or repeated.}
+
+## Components of a JAGS Program
+
+1. Model definition
+2. Compilation of model into computer memory
+3. Initialization of model
+4. Adaptation and burn-in
+5. Monitoring or saving MCMC-generated values
+
+# Example: Normal-Normal Model
+
+## Normal-Normal model
+
+Let $N(\mu, \tau^2)$ denote a normal distribution with mean $\mu$ and precision $\tau^2$. Suppose
+
+\vspace{-.75cm}
+\begin{align*}
+Y_i|\mu, \tau^2 &\stackrel{iid}{\sim} N(\mu, \tau^2) & & \text{likelihood} \\
+\mu &\sim N(\mu_0, \tau^2_0)  & & \text{prior}\\
+\tau^2 &\sim \text{Gamma}(a, b)
+\end{align*}
+\vspace{-.75cm}
+
+Then we know that, 
+
+\vspace{-.75cm}
+\begin{align*}
+\mu|\tau^2, \mathbf{Y} &\sim N\left(\frac{\tau_0^2\mu_0 + n\tau^2\bar{Y}}{\tau_0^2 + n\tau^2}, \tau_0^2 + n \tau^2 \right) \\
+\tau^2|\mu, \mathbf{Y} &\sim \text{Gamma} \left(a + \frac{n}{2}, b + \frac{1}{2}\sum_i (Y_i - \mu)^2 \right)
+\end{align*}
+\vspace{-0.75cm}
+
+## Simulate data
+
+\footnotesize 
+
+```{r sim_prior_nn, echo = TRUE}
+mu <- 0; tau2 <- 0.01             # Define simulation parameters
+
+set.seed(2020428)                       
+n <- 100                          # Number of observations in our data
+Y <- rnorm(n, mu, sqrt(1/tau2))   # Simulate data
+```
+
+```{r plot_sim_data_nn, fig.width = 4.25, fig.height = 2.25, fig.align='left'}
+data.frame(y = Y) %>%
+  ggplot(aes(x = y)) + 
+  geom_histogram(aes(y = ..density..), 
+                 color = "white", 
+                 fill = "grey", 
+                 binwidth = 2) +
+  geom_line(aes(x = value, y = density), 
+            color = "red", 
+            data = data.frame(value = seq(-30, 30, length = 1000), 
+                              density = dnorm(seq(-30, 30, length = 1000), mu, 1/sqrt(tau2)))) + 
+  labs(title = "Distribution of simulated data", 
+       x = "Y", 
+       Y = "density") +
+  theme_bw() +
+  theme(plot.title = element_text(size = 10), 
+        axis.title.x = element_text(size = 8),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 6), 
+        axis.text.y = element_text(size = 6), 
+        panel.background = element_rect(fill = "transparent",colour = NA), 
+        plot.background = element_rect(fill = "transparent",colour = NA))
+```
+
+## Define model
+
+We define the model in the file `nn_model.jags`.
+
+```
+model {
+  mu ~ dnorm(mu_0, tau2_0)
+  tau2 ~ dgamma(a, b)
+
+  for(i in 1:n){
+    Y[i] ~ dnorm(mu, tau2)
+  }
+}
+```
+
+## Define priors
+
+\footnotesize
+
+```{r define_inits_nn, echo = TRUE, warning=FALSE}
+library(rjags)                      # R interface to JAGS
+library(ggmcmc)                     # tidy output objects
+
+# Define prior parameters
+mu_0 <- 0; tau2_0 <- 0.01           # Prior parameters for mu
+a <- 1; b <- 0.1                    # Prior parameters for tau
+
+# Define data
+data_list <- list(mu_0 = mu_0,
+                  tau2_0 = tau2_0,
+                  a = a, b = b,
+                  n = n, Y = Y)
+```
+
+## Compile model into memory and run model
+
+\footnotesize
+
+```{r compile_model_nn, echo = TRUE}
+# Compile model into memory
+jags_model <- jags.model("./model/nn_model.bugs",
+                         n.chains = 5,
+                         data = data_list, 
+                         quiet = TRUE)
+
+# burn-in of 1000 samples
+update(jags_model, 1000)
+
+# draw 2000 and convert samples to tidy format
+samples <- coda.samples(jags_model,
+                        variable.names = c("mu", "tau2"),
+                        n.iter = 2000) %>%
+  ggs()
+```
+
+## Posterior trace and density plots
+
+```{r plot_post_nn, warning = FALSE, fig.align="center", fig.width = 5, fig.height = 3}
+suppressMessages(library(ggpubr))
+
+# Calculate posterior parameters
+post_mu_mean <- (tau2_0*mu_0 + n*tau2*mean(Y))/(tau2_0 + n*tau2)
+post_mu_prec <- tau2_0 + n*tau2
+post_tau_a <- a + n/2
+post_tau_b <- b + sum((Y-mu)^2)/2
+
+trace_plots <- samples %>% ggs_traceplot() +
+  geom_hline(aes(yintercept = post_mean),
+             data.frame(Parameter = c("mu", "tau2"),
+                        post_mean = c(post_mu_mean, post_tau_a/post_tau_b))) +
+  theme_bw() +
+  theme(panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA),
+        legend.position = "none")
+
+density_plots <- samples %>% ggs_density() +
+  geom_vline(aes(xintercept = post_mean),
+             data.frame(Parameter = c("mu", "tau2"),
+                        post_mean = c(post_mu_mean, post_tau_a/post_tau_b))) +
+  theme_bw() +
+  theme(panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA))
+
+ggarrange(trace_plots, density_plots, nrow = 1)
+```
+
+## Chain autocorrelation
+
+```{r plot_ac_nn, fig.width= 6, fig.height = 4, fig.align = "center"}
+samples %>% ggs_autocorrelation() +
+  theme_bw() +
+  theme(panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA),
+        axis.text = element_text(size = 8),
+        axis.title = element_text(size = 10))
+```
+
+# Example: Finite Mixture of Normal Distributions
+
+## Finite Mixture of Normals
+
+Suppose we have data that comes from a mixture of normal distributions:
+
+\vspace{-.75cm}
+\begin{align*}
+Z_i|\pi & \sim Bernoulli(\pi) \\
+Y_i|Z_i, \mu_1, \mu_2, \tau_2^2 &\stackrel{iid}{\sim} \begin{cases} N(\mu_1, \tau^2)  & \text{ if } Z_i = 1 \\ N(\mu_2, \tau^2) & \text{ if } Z_i = 0 \end{cases}
+\end{align*}
+\vspace{-.75cm}
+
+Let,
+
+\vspace{-.75cm}
+\begin{align*}
+\mu_i &\sim N(\mu_{0i}, \tau^2_{0})\\
+\tau^2 &\sim Gamma(a, b)\\
+\pi & \sim Beta(\alpha, \beta)
+\end{align*}
+\vspace{-.75cm}
 
 
+## Simulate data
+
+\footnotesize
+
+```{r sim_mnn, size= 4, echo = TRUE}
+mu_1 <- -2.75; mu_2 <- 2.75; tau2 <- 1; pi <- 0.4
+
+set.seed(689934)
+n <- 1000 
+Z <- rbinom(n, 1, pi)
+Y <- Z*rnorm(1000, mu_1, sqrt(1/tau2)) + 
+  (1-Z)*rnorm(1000, mu_2, sqrt(1/tau2))
+```
+
+```{r plot_sim_data_mnn, fig.width = 4.5, fig.height = 2, fig.align='center'}
+data.frame(y = Y) %>%
+  ggplot(aes(x = y)) +
+  geom_histogram(aes(y = ..density..),
+                 color = "white",
+                 fill = "grey",
+                 binwidth = 0.5) +
+  geom_line(aes(x = value, y = density),
+            color = "red",
+            data = data.frame(value = seq(-7, 7, length = 1000),
+                              density = 0.4*dnorm(seq(-7, 7, length = 1000), mu_1, 1/sqrt(tau2)))) +
+  geom_line(aes(x = value, y = density),
+            color = "red",
+            data = data.frame(value = seq(-7, 7, length = 1000),
+                              density = 0.6*dnorm(seq(-7, 7, length = 1000), mu_2, 1/sqrt(tau2)))) +
+  labs(x = "Y",
+       Y = "density") +
+  scale_x_continuous(breaks = seq(-7, 7, by = 1)) +
+  theme_bw() +
+  theme(plot.title = element_text(size = 10),
+        axis.title.x = element_text(size = 8),
+        axis.title.y = element_text(size = 8),
+        axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA))
+```
+
+## Define model
+
+We define the model in the file `mixed_nn_model.jags`.
+
+```
+model {
+  mu_1 ~ dnorm(mu_01, tau2_0)
+  mu_2 ~ dnorm(mu_02, tau2_0)
+  tau2 ~ dgamma(a, b)
+  pi ~ dbeta(alpha, beta)
+
+  for(i in 1:n){
+    Z[i] ~ dbern(pi)
+    mu[i] <- Z[i]*mu_1 + (1-Z[i])*mu_2
+    Y[i] ~ dnorm(mu[i], tau2)
+  }
+}
+```
+
+Note that in JAGS, we can explicitly model the class label, $Z_i$. 
+
+## Define priors
+
+\footnotesize
+
+```{r define_inits_mnn, echo = TRUE}
+# Define priors for mu
+mu_01 <- -10; mu_02 <- 10;
+tau2_0 <- 0.01
+
+# Prior parameters for tau
+a <- 1; b <- 0.01
+
+# Prior parameters for pi
+alpha <- 4; beta <- 6
+
+# Define data
+data_list <- list(mu_01 = mu_01, mu_02 = mu_02,
+                  tau2_0 = tau2_0,
+                  a = a, b = b,
+                  alpha = alpha, beta = beta,
+                  n = n, Y = Y)
+```
+
+## Compile model into memory and run model
+
+\footnotesize
+
+```{r compile_model_mnn, echo = TRUE}
+# Compile model into memory
+jags_model <- jags.model("./model/mixed_nn_model.bugs",
+                         n.chains = 5,
+                         data = data_list, 
+                         quiet = TRUE)
+
+# burn-in of 1000 samples
+update(jags_model, 1000)
+
+# draw 2000 and convert samples in tidy format
+samples <- coda.samples(jags_model,
+                        variable.names = c("mu_1", "mu_2", "pi", 
+                                           "tau2", "Z"),
+                        n.iter = 2000) %>%
+  ggs()
+```
+
+## Posterior trace and density plots
+
+```{r plot_post_mnn, warning = FALSE, fig.align="center", fig.width = 6, fig.height = 4}
+trace_plots <- samples %>%
+  filter(!grepl("Z", Parameter)) %>%
+  ggs_traceplot() +
+  theme_bw() +
+  theme(panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA),
+        legend.position = "none")
+
+density_plots <- samples %>%
+  filter(!grepl("Z", Parameter)) %>%
+  ggs_density() +
+  theme_bw() +
+  theme(panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA))
+
+ggarrange(trace_plots, density_plots, nrow = 1)
+```
+
+## Posterior probabilities of group 1 vs group 2
+
+```{r plot_post_Z, fig.width = 6, fig.height = 4}
+samples %>%
+  filter(grepl("Z", Parameter)) %>%
+  group_by(Parameter, Chain) %>%
+  summarize(prop_enriched = mean(value)) %>%
+  rowwise() %>%
+  mutate(index = as.numeric(unlist(regmatches(Parameter, regexec("Z\\[([0-9]*)\\]", Parameter)))[2])) %>%
+  left_join(data.frame(index = 1:n,
+                       obs_Y = Y),
+            by = "index") %>%
+  ggplot(aes(x = obs_Y, y = prop_enriched, color = as.factor(Chain))) +
+  geom_line() +
+  labs(x = "observed value",
+       y = "posterior probability",
+       color = "chain") +
+  theme_bw() +
+  theme(panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA))
+```
+
+## Chain autocorrelation
+
+```{r plot_ac_mnn, fig.width= 6, fig.height = 4, fig.align = "center"}
+samples %>%
+  filter(!grepl("Z", Parameter)) %>%
+  ggs_autocorrelation() +
+  theme_bw() +
+  theme(panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA),
+        axis.text = element_text(size = 8),
+        axis.title = element_text(size = 10))
+```
+
+## Non-identifiability and the label-switching problem
+
+One of the main problems with mixture models is an identifiability problem often referred to as the \textcolor{darktan}{\textbf{label-switching problem.}}
+
+Briefly, the label switching problem arises when the prior and likelihood are invariant under permutation of class labels. 
+
+Next week, \textcolor{darktan}{\textbf{Tuesday, May 5th}}, Jacob will implement this mixture model in `Stan` and discuss the label-switching problem and how to address it in more depth. 
+
+# Additional Tips and Tricks
+
+## Custom likelihoods: the Zero's Trick
+
+The \textcolor{darktan}{\textbf{zero's trick}} is an approach to specifying custom likelihoods in JAGS. 
+
+Suppose $L$ is the custom likelihood we would like to use. The probability of only observing zeros for a Poisson($\lambda$) distribution is given by, 
+
+\vspace{-0.5cm}
+
+$$f(0|\lambda) = \frac{\lambda^{0}e^{-\lambda}}{0!} = e^{-\lambda}$$
+Thus, if we define $\lambda = -\log(L)$, $f(0|\lambda) = e^{-(-\log(L))} = L,$ and we can obtain the correct likelihood contribution. 
+
+\footnotesize
+
+```
+model{ 
+  # rest of model block
+  for(i in 1:N){
+    zeros[i] <- 0                   # Observation of all zeros
+    zeros[i] ~ dpois(lambda[i])     # Specify poisson dist
+    lambda[i] <- -log(L)            # Define custom likelihood
+  }
+}
+```
+
+## Custom likelihoods: the One's Trick
+
+An alternative to the zero's trick is the \textcolor{darktan}{\textbf{one's trick}}. Again, if $L$ is the custom likelihood we would like to use, the probability of only observing ones for a Bernoulli($\pi$) distribution is given by, 
+
+\vspace{-0.5cm}
+
+$$f(1|\pi) = \pi^1(1-\pi)^0 = \pi$$
+Thus, if we define $\pi = L$, $f(0|\pi) = L,$ and we can obtain the correct likelihood contribution. 
+
+\footnotesize
+
+```
+model{ 
+  # rest of model block
+  for(i in 1:N){
+    ones[i] <- 1                # Observation of all ones
+    ones[i] ~ dbern(ones[i])    # Specify bernoulli dist
+    pi[i] <- L                  # Define custom likelihood
+  }
+}
+```

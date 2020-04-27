@@ -1,0 +1,21 @@
+### JAGS model for a simple normal-normal model
+# ----- data -----
+# n             number of samples 
+# Y             vector of observed data
+
+# ----- Prior parameters -----
+# mu_0, tau2_0  prior parameters for mu
+# a, b          prior parameters for tau2
+
+# ----- parameters of interest -----
+# mu            mean of data Y
+# tau2          variance of data Y
+
+model {
+  mu ~ dnorm(mu_0, tau2_0)
+  tau2 ~ dgamma(a, b)
+  
+  for(i in 1:n){
+    Y[i] ~ dnorm(mu, tau2)
+  }
+}
